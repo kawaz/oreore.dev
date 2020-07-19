@@ -42,7 +42,7 @@ jobs:
           --domains \*.lo.oreore.dev \
           run
     - name: DEBUG upload-artifact .lego/
-      - uses: actions/upload-artifact@v2
-        with:
-          name: .lego
-          path: .lego/
+      uses: actions/upload-artifact@v2
+      with:
+        name: .lego
+        path: .lego/
