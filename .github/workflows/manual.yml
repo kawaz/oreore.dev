@@ -29,6 +29,9 @@ jobs:
     - name: Setup .lego/accounts
       run: echo '${{ secrets.LEGO_ACCOUNT_TGZ }}' | openssl enc -A -d -base64 | tar xz
     - run: env
+    - run: set
+    - run: ls -la .lego
+    - run: echo $UID:$GID
 #     - name: Run lego
 #       run: |
 #         docker run \
