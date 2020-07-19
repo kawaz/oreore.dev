@@ -28,20 +28,21 @@ jobs:
     # Runs a single command using the runners shell
     - name: Setup .lego/accounts
       run: echo '${{ secrets.LEGO_ACCOUNT_TGZ }}' | openssl enc -A -d -base64 | tar xz
-    - name: Run lego
-      run: |
-        docker run \
-          -e CLOUDFLARE_DNS_API_TOKEN='${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}' \
-          -v "$PWD/.lego:/.lego" \
-          goacme/lego \
-          --accept-tos \
-          --email '${{ secrets.LEGO_ACCOUNT_EMAIL }}' \
-          --dns cloudflare \
-          --domains \*.oreore.dev \
-          --domains \*.localhost.oreore.dev \
-          --domains \*.lo.oreore.dev \
-          run
-    - name: DEBUG upload-artifact .lego/
-      uses: actions/upload-artifact@v2
-      with:
-        path: .lego/
+    - run: env
+#     - name: Run lego
+#       run: |
+#         docker run \
+#           -e CLOUDFLARE_DNS_API_TOKEN='${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}' \
+#           -v "$PWD/.lego:/.lego" \
+#           goacme/lego \
+#           --accept-tos \
+#           --email '${{ secrets.LEGO_ACCOUNT_EMAIL }}' \
+#           --dns cloudflare \
+#           --domains \*.oreore.dev \
+#           --domains \*.localhost.oreore.dev \
+#           --domains \*.lo.oreore.dev \
+#           run
+#     - name: DEBUG upload-artifact .lego/
+#       uses: actions/upload-artifact@v2
+#       with:
+#         path: .lego/
