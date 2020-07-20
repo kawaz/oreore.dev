@@ -23,15 +23,17 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    # Runs a single command using the runners shell
+    - uses: actions/cache@v1
+        with:
+          path: ~/.lego
+          key: dot-lego
+          restore-keys: dot-lego
+    
     - name: Setup .lego/accounts
       run: echo '${{ secrets.LEGO_ACCOUNT_TGZ }}' | openssl enc -A -d -base64 | tar xz
-    - run: env
-    - run: set
+    
     - run: ls -lRa .lego
-    - run: echo $UID:$GID
     - name: Run lego
       run: |
         docker run \
@@ -46,8 +48,3 @@ jobs:
           --domains \*.localhost.oreore.dev \
           --domains \*.lo.oreore.dev \
           run
-    - run: ls -lRa .lego
-    - name: DEBUG upload-artifact .lego/
-      uses: actions/upload-artifact@v2
-      with:
-        path: .lego/
