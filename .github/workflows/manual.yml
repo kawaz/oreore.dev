@@ -25,10 +25,10 @@ jobs:
 
     steps:
     - uses: actions/cache@v1
-        with:
-          path: ~/.lego
-          key: dot-lego
-          restore-keys: dot-lego
+      with:
+        path: ~/.lego
+        key: dot-lego
+        restore-keys: dot-lego
     
     - name: Setup .lego/accounts
       run: echo '${{ secrets.LEGO_ACCOUNT_TGZ }}' | openssl enc -A -d -base64 | tar xz
