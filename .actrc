@@ -1,0 +1,10 @@
+## default of github @202020802
+#-P ubuntu-latest=nektos/act-environments-ubuntu:18.04
+
+## default of act @202020802
+#-P ubuntu-latest=2.6-buster-slim
+
+## docker build -t act-environments-ubuntu - <<< $'FROM node:12.6-buster-slim\nRUN apt update && apt install -y zstd rsync && curl -sL "$(curl -sL https://api.github.com/repos/go-acme/lego/releases/latest 2>/dev/null | grep -oE -m1 https:.+/lego_v.+_linux_amd64.tar.gz)" | tar xz -C /usr/bin/ lego'
+-P ubuntu-latest=act-environments-ubuntu
+
+--secret-file .actrc.secret-file.env

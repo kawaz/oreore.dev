@@ -1,50 +1,88 @@
-# This is a basic workflow that is manually triggered
+name: scheduled workflow
 
-name: Manual workflow
-
-# Controls when the action will run. Workflow runs when manually triggered using the UI
-# or API.
 on:
   workflow_dispatch:
-    # Inputs the workflow accepts.
-    inputs:
-      name:
-        # Friendly description to be shown in the UI instead of 'name'
-        description: 'Person to greet'
-        # Default value if no value is explicitly provided
-        default: 'World'
-        # Input has to be provided for the workflow to run
-        required: true
+    branch: [ master ]
+  schedule:
+    - cron: '53 19 */9 * *'
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+env:
+  CLOUDFLARE_DNS_API_TOKEN: ${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}
+  DOMAIN_NAME: ""
+  LEGO_ACCOUNT_EMAIL: ${{ secrets.LEGO_ACCOUNT_EMAIL }}
+  LEGO_STAGING: "true"
+  LEGO_KEY_TYPE_EXCLUDES: rsa8192
+
 jobs:
-  # This workflow contains a single job called "greet"
   lego:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/cache@v1
-      with:
-        path: ~/.lego
-        key: dot-lego
-        restore-keys: dot-lego
-    
-    - name: Setup .lego/accounts
-      run: echo '${{ secrets.LEGO_ACCOUNT_TGZ }}' | openssl enc -A -d -base64 | tar xz
-    
-    - run: ls -lRa .lego
-    - name: Run lego
-      run: |
-        docker run \
-          -e CLOUDFLARE_DNS_API_TOKEN='${{ secrets.CLOUDFLARE_DNS_API_TOKEN }}' \
-          -v "$PWD/.lego:/.lego" \
-          -u $UID \
-          goacme/lego \
-          --accept-tos \
-          --email '${{ secrets.LEGO_ACCOUNT_EMAIL }}' \
-          --dns cloudflare \
-          --domains \*.oreore.dev \
-          --domains \*.localhost.oreore.dev \
-          --domains \*.lo.oreore.dev \
-          run
+      - name: Cache node modules
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-lego-binary
+        with:
+          path: /usr/bin/lego
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: install lego
+        run: 'curl -sL "$(curl -sL https://api.github.com/repos/go-acme/lego/releases/latest 2>/dev/null | grep -oE -m1 https:.+/lego_v.+_linux_amd64.tar.gz)" | tar xz -C /usr/bin/ lego'
+
+      - name: lego run
+        run: |
+          set -e
+          set -o pipefail
+          # rsa8192 is not supported by Let's Encrypt (lego supports it)
+          export DOMAIN_NAME=${DOMAIN_NAME:-${GITHUB_REPOSITORY#*/}}
+          LEGO_SERVER_DEFAULT=$(lego help | grep -- "--server.*default" | perl -pe's/.*defaults?:.*?(https:[a-zA-Z0-9_:\/\.\-]+).*/$1/')
+          LEGO_KEY_TYPE_DEFAULT=$(lego help | grep -- "--key-type.*default" | perl -pe's/.*defaults?:.*?([a-zA-Z0-9]+).*/$1/')
+          LEGO_KEY_TYPE_EXCLUDES=($(echo "$LEGO_KEY_TYPE_EXCLUDES" | grep -oE '[a-z]+[0-9]+' | sort -u))
+          LEGO_KEY_TYPES=($(lego help | grep -- --key-type | grep -oE '[a-z]+[0-9]+' | sort -u))
+          lego_opts=()
+          lego_opts+=( --accept-tos --email "${LEGO_ACCOUNT_EMAIL:-acme-lego@$DOMAIN_NAME}" )
+          lego_opts+=( --dns cloudflare )
+          lego_opts+=( --pem )
+          lego_opts+=( --domains "*.$DOMAIN_NAME" )
+          lego_opts+=( --domains "*.lo.$DOMAIN_NAME" )
+          lego_opts+=( --domains "*.localhost.$DOMAIN_NAME" )
+          if [[ -z $LEGO_SERVER ]]; then
+            if [[ $LEGO_STAGING == [tTyY1]* ]]; then
+              LEGO_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory
+            else
+              LEGO_SERVER=$LEGO_SERVER_DEFAULT
+            fi
+          fi
+          lego_opts+=( --server "$LEGO_SERVER" )
+          LEGO_PATH_SERVER="$GITHUB_WORKSPACE/lego-pathes/${LEGO_SERVER//[^a-zA-Z0-9_\.\-]/_}"
+          LOG_PATH="$LEGO_PATH_SERVER.log-$(date +%Y%m%dT%H%M%S%z)"
+          RELEASE_PATH="$GITHUB_WORKSPACE/release"
+          mkdir -p "$LEGO_PATH_SERVER"
+          mkdir -p "$RELEASE_PATH"
+          for key_type in "${LEGO_KEY_TYPES[@]}"; do
+            echo "START: key-type=$key_type"
+            key_type_excluded=
+            for t in "${LEGO_KEY_TYPE_EXCLUDES[@]}"; do
+              if [[ $key_type == "$t" ]]; then
+                key_type_excluded=1
+              fi
+            done
+            if [[ -n $key_type_excluded ]]; then
+              echo "SKIP: key-type=$key_type is excluded."
+              continue
+            fi
+            LEGO_PATH="$LEGO_PATH_SERVER/$key_type"
+            mkdir -p "$LEGO_PATH"
+            # wait until dns cache expires
+            if grep -qi "acme:.*Try.*DNS-[0-9]" "$LOG_PATH"; then
+              sleep 90
+            fi
+            echo '${{ secrets.LEGO_ACCOUNTS_TGZ }}' | base64 -d | tar xz -C "$LEGO_PATH" || :
+            LEGO_PATH=$LEGO_PATH lego "${lego_opts[@]}" run || :
+            ( cd "$LEGO_PATH/certificates" && tar cfz "$RELEASE_PATH/${DOMAIN_NAME}-certificate-${key_type}.tar.gz" * )
+          done | tee "$LOG_PATH"
+          cp -ap "$RELEASE_PATH/${DOMAIN_NAME}-certificate-${LEGO_KEY_TYPE_DEFAULT}".tar.gz "${RELEASE_PATH}/${DOMAIN_NAME}-certificate-default.tar.gz"
+          tar xfz "${RELEASE_PATH}/${DOMAIN_NAME}-certificate-default.tar.gz" -C "${RELEASE_PATH}"
