@@ -22,7 +22,7 @@ jobs:
         env:
           cache-name: cache-lego-binary
         with:
-          path: /usr/bin/lego
+          path: ~/bin/lego
           key: ${{ runner.os }}-build-${{ env.cache-name }}-
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
@@ -30,12 +30,13 @@ jobs:
             ${{ runner.os }}-
 
       - name: install lego
-        run: 'curl -sL "$(curl -sL https://api.github.com/repos/go-acme/lego/releases/latest 2>/dev/null | grep -oE -m1 https:.+/lego_v.+_linux_amd64.tar.gz)" | tar xz -C /usr/bin/ lego'
+        run: 'mkdir -p ~/bin && curl -sL "$(curl -sL https://api.github.com/repos/go-acme/lego/releases/latest 2>/dev/null | grep -oE -m1 https:.+/lego_v.+_linux_amd64.tar.gz)" | tar xz -C ~/bin/ lego'
 
       - name: lego run
         run: |
           set -e
           set -o pipefail
+          export PATH=~/bin:$PATH
           # rsa8192 is not supported by Let's Encrypt (lego supports it)
           export DOMAIN_NAME=${DOMAIN_NAME:-${GITHUB_REPOSITORY#*/}}
           LEGO_SERVER_DEFAULT=$(lego help | grep -- "--server.*default" | perl -pe's/.*defaults?:.*?(https:[a-zA-Z0-9_:\/\.\-]+).*/$1/')
