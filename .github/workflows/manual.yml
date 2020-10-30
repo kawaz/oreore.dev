@@ -110,6 +110,7 @@ jobs:
             const path = require('path');
             const fs = require('fs');
             const release_id = '${{ needs.create_release.outputs.id }}';
+            await fs.readdirSync('./release').then(r=>console.log(r));
             for (let file of await fs.readdirSync('./release')) {
               if ( /.*(\.tar\.gz|key|crt|pem)$/.test(path) ) {
                 console.log('uploadReleaseAsset', file);
