@@ -29,6 +29,7 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
       - name: install lego
+        shell: bash
         run: |
           set -e
           [[ command -v lego ]] && exit 0
@@ -42,7 +43,8 @@ jobs:
     needs: [lego_setup]
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - shell: bash
+        run: |
           set -e
           set -o pipefail
           # rsa8192 is not supported by Let's Encrypt (lego supports it)
