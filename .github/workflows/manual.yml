@@ -101,6 +101,26 @@ jobs:
             - Second Change
           draft: true
           prerelease: false
-          
-          
-          
+      
+      - id: upload_assets
+      - name: Upload assets
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const path = require('path');
+            const fs = require('fs');
+            const release_id = '${{ needs.create_release.outputs.id }}';
+            for (let file of await fs.readdirSync('./release')) {
+              if ( /.*(\.tar\.gz|key|crt|pem)$/.test(path) ) {
+                console.log('uploadReleaseAsset', file);
+                await github.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release_id,
+                  name: file,
+                  data: await fs.readFileSync(`./${file}`)
+                });
+              }
+            }
+
