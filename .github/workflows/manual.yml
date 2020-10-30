@@ -103,7 +103,6 @@ jobs:
           prerelease: false
       
       - id: upload_assets
-      - name: Upload assets
         uses: actions/github-script@v3
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
