@@ -17,7 +17,7 @@ jobs:
   lego:
     runs-on: ubuntu-latest
     steps:
-      - name: Cache node modules
+      - name: Cache lego binary
         uses: actions/cache@v2
         env:
           cache-name: cache-lego-binary
