@@ -1,4 +1,4 @@
-name: scheduled workflow
+name: manual workflow
 
 on:
   workflow_dispatch:
