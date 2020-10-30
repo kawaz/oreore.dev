@@ -14,7 +14,7 @@ env:
   LEGO_KEY_TYPE_EXCLUDES: rsa8192
 
 jobs:
-  lego:
+  lego_setup:
     runs-on: ubuntu-latest
     steps:
       - name: Cache lego binary
@@ -28,40 +28,60 @@ jobs:
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
             ${{ runner.os }}-
-
       - name: install lego
-        run: 'mkdir -p ~/bin && curl -sL "$(curl -sL https://api.github.com/repos/go-acme/lego/releases/latest 2>/dev/null | grep -oE -m1 https:.+/lego_v.+_linux_amd64.tar.gz)" | tar xz -C ~/bin/ lego'
-
-      - name: lego run
         run: |
           set -e
+          [[ command -v lego ]] && exit 0
+          mkdir -p ~/bin
+          curl -sL "$(curl -sL https://api.github.com/repos/go-acme/lego/releases/latest 2>/dev/null | grep -oE -m1 https:.+/lego_v.+_linux_amd64.tar.gz)" | tar xz -C ~/bin lego
+          echo ~/bin >> $GITHUB_PATH
+      - name: lego --version
+        run: lego ~/bin/lego
+    
+  lego_run:
+    needs: [lego_setup]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -e
           set -o pipefail
-          export PATH=~/bin:$PATH
           # rsa8192 is not supported by Let's Encrypt (lego supports it)
-          export DOMAIN_NAME=${DOMAIN_NAME:-${GITHUB_REPOSITORY#*/}}
           LEGO_SERVER_DEFAULT=$(lego help | grep -- "--server.*default" | perl -pe's/.*defaults?:.*?(https:[a-zA-Z0-9_:\/\.\-]+).*/$1/')
           LEGO_KEY_TYPE_DEFAULT=$(lego help | grep -- "--key-type.*default" | perl -pe's/.*defaults?:.*?([a-zA-Z0-9]+).*/$1/')
-          LEGO_KEY_TYPE_EXCLUDES=($(echo "$LEGO_KEY_TYPE_EXCLUDES" | grep -oE '[a-z]+[0-9]+' | sort -u))
           LEGO_KEY_TYPES=($(lego help | grep -- --key-type | grep -oE '[a-z]+[0-9]+' | sort -u))
-          lego_opts=()
-          lego_opts+=( --accept-tos --email "${LEGO_ACCOUNT_EMAIL:-acme-lego@$DOMAIN_NAME}" )
-          lego_opts+=( --dns cloudflare )
-          lego_opts+=( --pem )
-          lego_opts+=( --domains "*.$DOMAIN_NAME" )
-          lego_opts+=( --domains "*.lo.$DOMAIN_NAME" )
-          lego_opts+=( --domains "*.localhost.$DOMAIN_NAME" )
+          LEGO_KEY_TYPE_EXCLUDES=($(echo "$LEGO_KEY_TYPE_EXCLUDES" | grep -oE '[a-z]+[0-9]+' | sort -u))
+          
+          # update env
+          DOMAIN_NAME=${DOMAIN_NAME:-${GITHUB_REPOSITORY#*/}}
+          echo "DOMAIN_NAME=$DOMAIN_NAME" >> $GITHUB_ENV
+          # update env          
+          LEGO_ACCOUNT_EMAIL="${LEGO_ACCOUNT_EMAIL:-acme-lego@$DOMAIN_NAME}"
+          echo "LEGO_ACCOUNT_EMAIL=$LEGO_ACCOUNT_EMAIL" >> $GITHUB_ENV
+          # update env
+          LEGO_STAGING=$([[ $LEGO_STAGING == [tTyY1]* ]] && echo 1)
+          echo "LEGO_STAGING=$LEGO_STAGING" >> $GIHUB_ENV
+          # update env
           if [[ -z $LEGO_SERVER ]]; then
-            if [[ $LEGO_STAGING == [tTyY1]* ]]; then
+            if [[ -n $LEGO_STAGING ]]; then
               LEGO_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory
             else
               LEGO_SERVER=$LEGO_SERVER_DEFAULT
             fi
           fi
+
+          lego_opts=()
+          lego_opts+=( --accept-tos --email "$LEGO_ACCOUNT_EMAIL" )
+          lego_opts+=( --dns cloudflare )
+          lego_opts+=( --pem )
+          lego_opts+=( --domains "*.$DOMAIN_NAME" )
+          lego_opts+=( --domains "*.lo.$DOMAIN_NAME" )
+          lego_opts+=( --domains "*.localhost.$DOMAIN_NAME" )
           lego_opts+=( --server "$LEGO_SERVER" )
+
           LEGO_PATH_SERVER="$GITHUB_WORKSPACE/lego-pathes/${LEGO_SERVER//[^a-zA-Z0-9_\.\-]/_}"
+          mkdir -p "$LEGO_PATH_SERVER"
           LOG_PATH="$LEGO_PATH_SERVER.log-$(date +%Y%m%dT%H%M%S%z)"
           RELEASE_PATH="$GITHUB_WORKSPACE/release"
-          mkdir -p "$LEGO_PATH_SERVER"
           mkdir -p "$RELEASE_PATH"
           for key_type in "${LEGO_KEY_TYPES[@]}"; do
             echo "START: key-type=$key_type"
@@ -87,10 +107,11 @@ jobs:
           done | tee "$LOG_PATH"
           cp -ap "$RELEASE_PATH/${DOMAIN_NAME}-certificate-${LEGO_KEY_TYPE_DEFAULT}".tar.gz "${RELEASE_PATH}/${DOMAIN_NAME}-certificate-default.tar.gz"
           tar xfz "${RELEASE_PATH}/${DOMAIN_NAME}-certificate-default.tar.gz" -C "${RELEASE_PATH}"
+          find "${RELEASE_PATH}"
 
   test:
     runs-on: ubuntu-latest
-    needs: [lego]
+    needs: [lego_run]
     steps:
       - run: |
           echo find-----------------------------------------------
@@ -138,7 +159,7 @@ jobs:
                   repo: context.repo.repo,
                   release_id: release_id,
                   name: file,
-                  data: await fs.readFileSync(`./${file}`)
+                  data: await fs.readFileSync(`./release/${file}`)
                 });
               }
             }
