@@ -110,7 +110,7 @@ jobs:
             const path = require('path');
             const fs = require('fs');
             const release_id = '${{ needs.create_release.outputs.id }}';
-            console.log(script({github, context}))
+            console.log({github, context})
             for (let file of fs.readdirSync('./release')) {
               console.log('found', file);
               if ( /.*(\.tar\.gz|key|crt|pem)$/.test(path) ) {
